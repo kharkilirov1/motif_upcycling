@@ -1,0 +1,14 @@
+model_id: Qwen/Qwen3-4B
+patched_layers: [15, 16, 17, 18]
+
+motif_upcycling:
+  num_motifs: 3
+  router_hidden: 128
+  router_type: contextual
+  lora_rank: 8
+  lora_alpha: 8.0
+  freeze_base: true
+
+sarc:
+  enabled: false
+  mode: off

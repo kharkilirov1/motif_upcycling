@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Notebooks / local logs
+.ipynb_checkpoints/
+wandb/
+runs/
+checkpoints/
+outputs/
+logs/
+*.log
+
+# OS
+.DS_Store
+__MACOSX/
+
+# Large model artifacts
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.ckpt

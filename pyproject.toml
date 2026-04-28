@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "motif-upcycling"
+version = "0.1.0"
+description = "Structure-preserving motif upcycling for Transformer models"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Motif-Upcycling contributors"}]
+dependencies = [
+    "torch>=2.1",
+]
+
+[project.optional-dependencies]
+hf = [
+    "transformers>=4.45",
+    "accelerate>=0.30",
+    "safetensors>=0.4",
+    "pyyaml>=6.0",
+]
+dev = [
+    "pytest>=7.4",
+    "pandas>=2.0",
+    "matplotlib>=3.8",
+    "pyyaml>=6.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"

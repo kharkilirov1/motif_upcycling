@@ -1,0 +1,27 @@
+model_id: Qwen/Qwen3.5-0.8B-Base
+patched_layers: [10, 11]
+
+motif_upcycling:
+  num_motifs: 6
+  router_hidden: 128
+  router_type: contextual
+  lora_rank: 8
+  lora_alpha: 8.0
+  freeze_base: true
+
+sarc:
+  enabled: true
+  mode: adapter_only
+  hidden: 16
+  eps: 1.0e-6
+  max_delta: 0.10
+  ratio_mode: delta_over_x
+  detach_ratio: false
+  log_stats: true
+
+training:
+  seq_len: 128
+  train_steps: 10000
+  eval_every: 500
+  learning_rate: 2.0e-4
+  seed: 0

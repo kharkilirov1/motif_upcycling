@@ -1,0 +1,4 @@
+component,params,pct_of_current
+current P4 trainable,692492,100.0
+SARC global gates,196,0.02830357607019287
+SARC motif-wise gates,588,0.08491072821057861
