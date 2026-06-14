@@ -88,7 +88,7 @@ PCA explained var    : PC1=0.54  PC2=0.22  PC3=0.17  PC4=0.06  PC5=0.01
 PC1 loadings         : confi=-0.58  cand=+0.59  margi=-0.02  kappa=-0.17  updat=+0.53
   -> all 5 load on PC1? min|load|=0.02
 single-readout sufficiency (PC1-only / all-signals):
-    motif        acc: all= 0.20  pc1= 0.18  ratio= 0.93
+    motif        acc: all= 0.10  pc1= 0.09  ratio= 0.90
     budget       acc: all= 1.00  pc1= 0.96  ratio= 0.96
     adapt        acc: all= 0.99  pc1= 0.97  ratio= 0.97
     trust        acc: all= 1.00  pc1= 0.96  ratio= 0.96
@@ -162,7 +162,7 @@ mean |off-diag corr| : 0.582     (now > 0.35)
 PCA explained var    : PC1=0.73  PC2=0.19  PC3=0.07  PC4=0.01  PC5=0.00   (PC1 > 0.55)
 PC1 loadings         : confi=+0.51 cand=-0.51 margi=+0.51 kappa=+0.12 updat=-0.45
   -> all 5 load on PC1? min|load|=0.12     (< 0.30)
-worst sufficiency ratio = 0.94             (> 0.85)
+worst sufficiency ratio = 0.88             (> 0.85)
 VERDICT: SEPARATE MECHANISMS
 ```
 Even when `margin` is forced into the perception cluster, the verdict **stays
@@ -195,15 +195,17 @@ would also require a pretrained causal-LM donor (not available offline here).
 To confirm the Stage-2 collector wiring works against this repo's **real**
 `MotifSwiGLUMLP` API, `collectors/stage2_smoke_motif.py` builds a tiny random
 Qwen-style SwiGLU donor, wraps it (contextual router + motif-LoRA + adapter-only
-SARC), captures per-token router `alpha`, `lora_delta`, and residual `x`, and emits
-the four transformer signals + decisions:
+SARC), runs the **full patched `forward`** (exercising the base channel split,
+router, motif-LoRA and the SARC scaler — `forward_shape_ok`/`last_stats` confirm
+this), and also captures per-token router `alpha`, `lora_delta`, and residual `x`
+to emit the four transformer signals + decisions:
 ```bash
 python collectors/stage2_smoke_motif.py --out data/tx_smoke.npz
 python load_and_test.py --data data/tx_smoke.npz --fig data/tx_smoke_field.png
 ```
 ```
 [SMOKE] wrote data/tx_smoke.npz: 8192 (token) sites x 4 signals
-[SMOKE] hooks OK: alpha(1, 3, 4), SARC last_stats=present
+[SMOKE] hooks OK: alpha(1, 3, 4), forward_shape_ok=True, SARC last_stats=present
 ================  data/tx_smoke.npz  ================
 mean|corr|=0.491  PC1=0.72  min|load|=0.05  worst suff ratio=0.67
 VERDICT: SEPARATE MECHANISMS

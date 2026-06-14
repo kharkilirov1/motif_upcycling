@@ -54,7 +54,7 @@ if str(EXP_ROOT) not in sys.path:
 from aot_v8.data import (  # noqa: E402
     OP_NONE, batch_examples, build_examples, make_vocab_for_splits,
 )
-from aot_v8.ops import DOMAIN_SIZES, ID2DOMAIN  # noqa: E402
+from aot_v8.ops import DOMAIN_SIZES, FLAT_OFFSETS, ID2DOMAIN  # noqa: E402
 from aot_v8.train_eval import set_seed, train_structured  # noqa: E402
 
 
@@ -207,7 +207,9 @@ def main():
             hard_correct = rank_true == 0
             in_top2 = rank_true <= 1
 
-            motif.append(o_true)                                  # which operator role
+            # domain-unique operator role (d4:0-7, c8:8-15, bool:16-19), so the same
+            # local id in different domains is not conflated into one class.
+            motif.append(FLAT_OFFSETS[domain] + o_true)           # which operator role
             trust.append(1 if hard_correct else 0)               # trust the parse?
             # 3 cost tiers: correct(cheap) / repairable(medium) / lost(expensive)
             budget.append(0 if hard_correct else (1 if in_top2 else 2))

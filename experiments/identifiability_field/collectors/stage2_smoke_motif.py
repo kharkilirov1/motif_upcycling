@@ -97,10 +97,16 @@ def main():
 
     M = mlp.num_motifs
     rows, motif, budget, temp, us_all = [], [], [], [], []
+    fwd_shape_ok = True
 
     with torch.no_grad():
         for _ in range(args.seq):
             x = torch.randn(1, args.tokens, args.hidden, generator=gen)  # [1,T,d] residual input
+            # Exercise the FULL patched module (base_update + lora_delta + router + SARC).
+            # In adapter_only mode this invokes the SARC scaler internally, validating it
+            # and populating last_stats (log_stats=True).
+            out = mlp(x)
+            fwd_shape_ok = fwd_shape_ok and tuple(out.shape) == (1, args.tokens, args.hidden)
             alpha = mlp._router_alpha(x)[0]               # [T, M]   router weights (M*softmax)
             delta = mlp.lora_delta(x)[0]                  # [T, d]   trainable motif/LoRA update
             xt = x[0]                                     # [T, d]
@@ -134,7 +140,8 @@ def main():
              dec__adapt=np.array(adapt), dec__temperature=np.array(temp, float))
     print(f"[SMOKE] wrote {args.out}: {X.shape[0]} (token) sites x {X.shape[1]} signals")
     print(f"[SMOKE] hooks OK: alpha{tuple(mlp._router_alpha(torch.randn(1,3,args.hidden)).shape)}, "
-          f"SARC last_stats={'present' if mlp.sarc_scaler.last_stats else 'none'}")
+          f"forward_shape_ok={fwd_shape_ok}, "
+          f"SARC last_stats={'present' if mlp.sarc_scaler.last_stats is not None else 'none'}")
     print("[SMOKE] WARNING: random untrained weights + synthetic targets -> verdict is NOT interpretable")
 
 
