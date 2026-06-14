@@ -45,12 +45,20 @@ python real_motif_budget.py --layers 4,7,10,13,16,19 --types q,o,gate,up,down \
 Outputs `data/het_budget.png`, `data/real_motif_budget.png`, and JSON reports.
 See `RESULTS.md`.
 
-**Both substrates agree:** synthetic (controlled, with a clean 0% homogeneous control)
-and real Qwen2.5-0.5B motifs both show heterogeneous budget allocation strictly beats a
-uniform bottleneck at equal budget (synthetic: 11.5% median lower error; real: 17%
-functional-error / 6% LM-loss improvement). On the real model the optimal allocation is
-interpretable — attention projections (high effective rank) earn budget while the very
-compressible `gate` and flat-marginal `up`/`down` are starved until budget is ample.
+**Three substrates, an honest split:**
+- *Synthetic* (controlled, clean 0% homogeneous control): heterogeneous beats uniform by
+  11.5% median lower error.
+- *Real Qwen2.5-0.5B, static SVD compression*: heterogeneous beats uniform by 17%
+  functional-error / 6% LM-loss; optimal allocation is interpretable (attention earns
+  budget; compressible `gate` and flat-marginal `up`/`down` are starved).
+- *Real Qwen2.5-0.5B, TRAINABLE adapters* (`trainable_het_rank.py`): **TIE** — gradient-
+  allocated heterogeneous rank is statistically indistinguishable from uniform at equal
+  trainable params (gap −0.0012 vs 2·SE 0.0115); both beat random by a hair.
+
+So Theorem 4 is a robust, measurable win for **inherited/fixed capacity** (compression),
+but **not demonstrably** for **added trainable capacity** with a one-shot gradient rule
+at this scale — an honest negative that points to a better allocator / larger scale as
+the real next problem. Full numbers and honest caveats in `RESULTS.md`.
 
 ## Connection to the program
 This is the cheap decisive test for FOG Theorem 4 — the "morphology-mismatch" result

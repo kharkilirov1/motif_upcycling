@@ -291,17 +291,39 @@ def main():
 
     lu, lh = results["uniform"]["loss"], results["heterogeneous"]["loss"]
     rel = (lu - lh) / max(abs(bl - lu), 1e-9)   # fraction of uniform's gain added by going heterogeneous
-    supported = lh < lu
-    verdict = ("HETEROGENEOUS BEATS UNIFORM at equal trainable params: allocating adapter "
-               "rank by gradient marginal value gives lower held-out LM loss than a uniform "
-               "rank -- Theorem 4 holds for trainable adaptation, not just static compression."
-               if supported else
-               "NOT SUPPORTED at this scale: uniform <= heterogeneous (noisy/short training).")
+
+    # noise-aware verdict: the het-vs-uniform gap must exceed ~2 standard errors of
+    # the per-seed spread to count as real (otherwise it is a statistical tie).
+    def _se(xs):
+        if len(xs) < 2:
+            return 0.0
+        m = sum(xs) / len(xs)
+        return (sum((x - m) ** 2 for x in xs) / len(xs)) ** 0.5 / len(xs) ** 0.5
+    gap = lu - lh
+    pooled_se = (_se(results["uniform"]["loss_per_seed"]) ** 2 +
+                 _se(results["heterogeneous"]["loss_per_seed"]) ** 2) ** 0.5
+    significant = gap > 2 * pooled_se
+    if significant:
+        supported = True
+        verdict = ("HETEROGENEOUS BEATS UNIFORM at equal trainable params (gap exceeds 2*SE): "
+                   "Theorem 4 holds for trainable adaptation, not just static compression.")
+    elif gap < -2 * pooled_se:
+        supported = False
+        verdict = "UNIFORM BEATS HETEROGENEOUS at this scale (gap exceeds 2*SE the other way)."
+    else:
+        supported = False
+        verdict = (f"TIE / INCONCLUSIVE: het-uniform gap ({gap:+.4f}) is within noise "
+                   f"(2*SE={2*pooled_se:.4f}). Gradient-allocated and uniform rank are "
+                   f"statistically indistinguishable for trainable adaptation at this scale; "
+                   f"both beat random. (Contrast: STATIC SVD compression clearly favours "
+                   f"heterogeneous -- see real_motif_budget.)")
+    report_extra = {"gap_lu_minus_lh": gap, "pooled_se": pooled_se, "significant": significant}
     report = {"model": args.model, "layers": layers, "types": types,
               "base_loss": bl, "budget_params": budget,
               "uniform_rank": args.uniform_rank, "results": results,
               "heterogeneous_vs_uniform_loss_delta": lu - lh,
-              "rel_extra_gain": rel, "supported": bool(supported), "verdict": verdict}
+              "rel_extra_gain": rel, "supported": bool(supported), "verdict": verdict,
+              **report_extra}
     outp = THIS.parent / args.out
     outp.parent.mkdir(parents=True, exist_ok=True)
     with open(outp, "w") as f:

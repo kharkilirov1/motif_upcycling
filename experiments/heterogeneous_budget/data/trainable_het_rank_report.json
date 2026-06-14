@@ -1,0 +1,76 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B",
+  "layers": [
+    6,
+    9,
+    12,
+    15
+  ],
+  "types": [
+    "q",
+    "o",
+    "gate",
+    "up",
+    "down"
+  ],
+  "base_loss": 3.9833307705872447,
+  "budget_params": 1335296,
+  "uniform_rank": 16,
+  "results": {
+    "uniform": {
+      "loss": 3.693419543282078,
+      "loss_per_seed": [
+        3.6969143617237714,
+        3.696336621088339,
+        3.6870076470341244
+      ],
+      "n_params": 1335296,
+      "by_type": {
+        "q": 16.0,
+        "o": 16.0,
+        "gate": 16.0,
+        "up": 16.0,
+        "down": 16.0
+      }
+    },
+    "heterogeneous": {
+      "loss": 3.6922430834308018,
+      "loss_per_seed": [
+        3.6806709478932915,
+        3.7022619619437145,
+        3.6937963404554
+      ],
+      "n_params": 1334528,
+      "by_type": {
+        "q": 8.5,
+        "o": 25.0,
+        "gate": 9.5,
+        "up": 18.5,
+        "down": 19.5
+      }
+    },
+    "random": {
+      "loss": 3.698800446575697,
+      "loss_per_seed": [
+        3.7021625870508506,
+        3.7058660426038377,
+        3.6883727100724024
+      ],
+      "n_params": 1335168,
+      "by_type": {
+        "q": 20.8,
+        "o": 15.2,
+        "gate": 12.2,
+        "up": 7.0,
+        "down": 27.5
+      }
+    }
+  },
+  "heterogeneous_vs_uniform_loss_delta": 0.0011764598512762348,
+  "rel_extra_gain": 0.0040580003134472195,
+  "supported": false,
+  "verdict": "TIE / INCONCLUSIVE: het-uniform gap (+0.0012) within noise (2*SE=0.0115); gradient-allocated and uniform rank statistically indistinguishable for trainable adaptation at this scale; both beat random. Contrast: static SVD compression clearly favours heterogeneous.",
+  "gap_lu_minus_lh": 0.0011764598512762348,
+  "pooled_se": 0.005759440243848724,
+  "significant": false
+}

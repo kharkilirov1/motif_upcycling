@@ -149,6 +149,68 @@ python real_motif_budget.py --layers 4,7,10,13,16,19 --types q,o,gate,up,down \
     --uniform-ranks 16,32,64,128 --calib-seq 16 --eval-seq 24
 ```
 
+---
+
+# Trainable adaptation (capstone) — heterogeneous rank is a TIE, NOT a win
+
+The static results above are about *inherited* capacity (compressing existing weights).
+The architecture-relevant question is *added trainable* capacity: if we add LoRA
+adapters to Qwen2.5-0.5B motifs and fine-tune, does allocating adapter **rank** by
+marginal value beat a **uniform** rank at equal trainable params?
+(`trainable_het_rank.py`; report `data/trainable_het_rank_report.json`.)
+
+**Setup.** LoRA adapters (the repo's `LowRankAdapter`) on q/o/gate/up/down across
+layers 6,9,12,15; base frozen; fine-tune on wikitext, held-out LM loss. Heterogeneous
+ranks allocated by a **gradient water-filling** rule (marginal value of the (k+1)-th
+rank unit at module i ≈ `sigma_{k+1}(dL/dW_i)^2 / param_cost`). Compared at EQUAL
+trainable params vs uniform rank and a random-heterogeneous control; 3 seeds.
+
+**A prerequisite failure, fixed (honest).** The first run used lr 5e-3 / 160 steps and
+**every** config ended up *worse* than the base model (base 3.97 → 4.28–4.34): the
+adapters over-fit/diverged on tiny wikitext, so no allocation comparison was meaningful.
+An lr diagnostic found lr 2e-3 / 100 steps is healthy (adapters improve held-out by
+~0.29). All results below use the healthy regime. (A naive verdict `lh < lu` was also
+replaced by a noise-aware test: the gap must exceed 2*SE of the per-seed spread.)
+
+**Result (healthy regime, 3 seeds, equal trainable params ≈ 1.335M):**
+
+| config | held-out loss (mean) | per-seed | improvement over base |
+|---|---:|---|---:|
+| base (no adapters) | 3.9833 | — | — |
+| uniform rank 16 | **3.6934** | 3.697 / 3.696 / 3.687 | +0.290 |
+| heterogeneous (gradient) | **3.6922** | 3.681 / 3.702 / 3.694 | +0.291 |
+| random (control) | 3.6988 | 3.702 / 3.706 / 3.688 | +0.285 |
+
+het − uniform = **−0.0012**, but 2·SE of the per-seed spread = **0.0115**. The gap is
+**well within noise → TIE / INCONCLUSIVE.** Heterogeneous (gradient-allocated) and
+uniform rank are statistically indistinguishable for trainable adaptation at this scale;
+both beat random by a hair. The gradient rule *did* produce a sensible heterogeneous
+allocation (per-type mean ranks q=8.5, o=25, gate=9.5, up=18.5, down=19.5 vs uniform 16),
+it just did not translate into a measurable end-loss advantage.
+
+**Why the contrast with the static result (honest hypotheses).**
+- A *one-shot* gradient probe at init is a weak predictor of where rank helps over 100
+  training steps (the useful subspace moves during training).
+- LoRA is flexible: a smaller-rank adapter where "more is needed" can still learn most
+  of the gain, so rank allocation is second-order for *added* capacity (unlike static
+  compression, where insufficient rank irrecoverably loses the existing function).
+- At this scale (0.5B, 100 CPU steps, wikitext→wikitext) the adaptation gains are small
+  and per-seed noise (~0.01) swamps a ~0.001 allocation effect.
+
+**Takeaway for the architecture.** Heterogeneous motif budgeting is a robust, measurable
+win for **inherited/fixed capacity** (compression, parameter-efficient inference — the
+static result: 17% functional / 6% loss), but **not** demonstrably for **added trainable
+capacity** with a one-shot gradient rule at this scale. To realize Theorem 4 for
+*trainable* architecture one likely needs a better allocator (iterative/learned rank, or
+re-probing during training) and/or larger scale — a concrete, honest next problem rather
+than a claimed win.
+
+## Reproduce (trainable)
+```bash
+python trainable_het_rank.py --layers 6,9,12,15 --types q,o,gate,up,down \
+    --uniform-rank 16 --steps 100 --lr 2e-3 --train-seq 140 --eval-seq 48 --seeds 0,1,2
+```
+
 ## What it means for the architecture question
 This is the resource-side confirmation of the program's deep idea: **heterogeneous
 operators deserve heterogeneous budgets; a uniform interface is provably wasteful when
