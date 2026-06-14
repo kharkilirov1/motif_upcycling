@@ -1,0 +1,10 @@
+numpy>=1.26
+scikit-learn>=1.3
+scipy>=1.11
+pandas>=2.0
+matplotlib>=3.7
+# Stage 1 (symbolic AOT substrate):
+torch>=2.1
+# Stage 2 only (transformer; not run in this gated result):
+# transformers>=4.40
+# datasets>=2.18
