@@ -36,9 +36,21 @@ allocation beats uniform by ~11% median (up to ~31%) at equal total budget, the 
 
 ## Run
 ```bash
+# synthetic controlled test (with homogeneous null control + dose-response)
 python run_het_budget.py --n 4000 --steps 600 --reps 3
+# real Transformer motifs (Qwen2.5-0.5B), measured eps_i(r) + end-to-end LM loss
+python real_motif_budget.py --layers 4,7,10,13,16,19 --types q,o,gate,up,down \
+    --uniform-ranks 16,32,64,128
 ```
-Outputs `data/het_budget.png` and `data/het_budget_report.json`. See `RESULTS.md`.
+Outputs `data/het_budget.png`, `data/real_motif_budget.png`, and JSON reports.
+See `RESULTS.md`.
+
+**Both substrates agree:** synthetic (controlled, with a clean 0% homogeneous control)
+and real Qwen2.5-0.5B motifs both show heterogeneous budget allocation strictly beats a
+uniform bottleneck at equal budget (synthetic: 11.5% median lower error; real: 17%
+functional-error / 6% LM-loss improvement). On the real model the optimal allocation is
+interpretable — attention projections (high effective rank) earn budget while the very
+compressible `gate` and flat-marginal `up`/`down` are starved until budget is ample.
 
 ## Connection to the program
 This is the cheap decisive test for FOG Theorem 4 — the "morphology-mismatch" result

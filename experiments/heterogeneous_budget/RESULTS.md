@@ -77,6 +77,78 @@ pip install torch numpy matplotlib    # + the repo (src/motif_upcycling on path)
 python run_het_budget.py --n 4000 --steps 600 --reps 3
 ```
 
+---
+
+# Real Transformer motifs (Qwen2.5-0.5B) — Theorem 4 holds on an actual model
+
+The synthetic test above could be dismissed as a constructed example. So the same
+question was asked of the **real motifs of a pretrained Transformer**, with no
+synthetic data (`real_motif_budget.py`). Figure: `data/real_motif_budget.png`; full
+output: `data/real_motif_budget_report.json`.
+
+**Setup.** Motif = one projection module per layer (attention `q_proj`/`o_proj` =
+compare; MLP `gate_proj` = select, `up_proj` = expand, `down_proj` = memory/compress),
+across layers 4,7,10,13,16,19 of `Qwen/Qwen2.5-0.5B`. For each module the error-vs-rank
+curve is **measured** as the functional reconstruction error of an SVD-truncated weight
+on **real wikitext token activations**: `eps_i(r) = E_x||(W-W_r)x||^2 / E_x||Wx||^2`.
+Budget = total low-rank params `sum_i r_i*(out_i+in_i)`. At equal budget we compare a
+**uniform** rank bottleneck vs the **exact-DP optimal** allocation, and confirm with
+**end-to-end held-out LM loss** (weights replaced by their rank-allocated reconstructions).
+
+**The real curves genuinely differ by motif type** (mean functional error):
+
+| rank r | gate (select) | q (compare) | o (compare) | down (memory) | up (expand) |
+|---:|---:|---:|---:|---:|---:|
+| 8 | 0.36 | 0.83 | 0.90 | 0.84 | 0.88 |
+| 64 | 0.24 | 0.36 | 0.68 | 0.72 | 0.73 |
+| 256 | 0.13 | 0.09 | 0.18 | 0.44 | 0.47 |
+
+`gate` is highly compressible (low rank suffices); `q` has a steep curve (high effective
+rank, but big error drop per rank); `up`/`down` are incompressible *and* flat-marginal.
+These different curves are exactly the precondition for Theorem 4.
+
+**Result (equal parameter budget, uniform vs optimal):**
+
+| uniform rank | budget | eps uniform | eps optimal | eps improvement | LM loss uniform | LM loss optimal | extra-loss reduced |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 16 | — | 21.62 | 18.79 | 13.1% | 5.926 | 5.825 | 5.5% |
+| 32 | — | 19.42 | 15.89 | 18.2% | 5.846 | 5.729 | 6.7% |
+| 64 | — | 16.60 | 13.32 | 19.8% | 5.738 | 5.623 | 7.0% |
+| 128 | — | 12.88 | 10.79 | 16.2% | 5.600 | 5.550 | 3.3% |
+
+Full-model held-out LM loss = **4.092**. Median functional-error improvement **17.2%**;
+median end-to-end extra-loss reduction **6.1%**. **VERDICT: THEOREM 4 SUPPORTED on real
+Transformer motifs** — at equal parameters, marginal-optimal allocation beats a uniform
+bottleneck in both functional error and LM loss.
+
+**The optimal allocation is strongly heterogeneous and interpretable.** Mean optimal
+rank per motif type:
+
+| budget | q | o | gate | up | down |
+|---:|---:|---:|---:|---:|---:|
+| r0=16 | 64 | 77 | 5 | 5 | 4 |
+| r0=64 | 213 | 256 | 25 | 37 | 25 |
+| r0=128 | 256 | 256 | 37 | 128 | 149 |
+
+At tight budgets the optimum pours rank into attention (`q`,`o`) and starves the FFN
+(`gate` is compressible; `up`/`down` give little marginal return), only funding `up`/`down`
+once budget is ample. A uniform rank bottleneck cannot express this — which is precisely
+the "uniform interface is wasteful" claim, now demonstrated on a real model.
+
+**Caveats (honest).** Low-ranking six layers' worth of q/o/gate/up/down is aggressive, so
+both allocations degrade LM loss substantially (4.09 → ~5.6–5.9); the *functional-error*
+metric (17% gap) is the cleaner, less-confounded signal, with the LM-loss gap (6%) as
+directional confirmation in a high-degradation regime. SVD truncation is a static probe,
+not a trained low-rank model; a fine-tuned heterogeneous-rank model would likely show a
+larger, cleaner gap. Only one model/size was tested.
+
+## Reproduce (real)
+```bash
+pip install torch transformers datasets numpy matplotlib
+python real_motif_budget.py --layers 4,7,10,13,16,19 --types q,o,gate,up,down \
+    --uniform-ranks 16,32,64,128 --calib-seq 16 --eval-seq 24
+```
+
 ## What it means for the architecture question
 This is the resource-side confirmation of the program's deep idea: **heterogeneous
 operators deserve heterogeneous budgets; a uniform interface is provably wasteful when
