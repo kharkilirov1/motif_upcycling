@@ -138,6 +138,8 @@ def main():
     ap.add_argument("--aot-epochs", type=int, default=60)
     ap.add_argument("--noise", type=float, default=1.75,
                     help="Gaussian perception noise on encoder states (gives decisions variance)")
+    ap.add_argument("--margin-source", choices=["kind", "op"], default="kind",
+                    help="kind=router/kind-head top1-top2 (cross-mechanism); op=op-head top1-top2")
     ap.add_argument("--distractor-rate", type=float, default=0.35)
     ap.add_argument("--seed", type=int, default=10)
     args = ap.parse_args()
@@ -191,7 +193,10 @@ def main():
 
             confidence = float(op_p.max())                       # op-head certainty
             cand_entropy = _entropy(op_p)                        # op-head spread
-            margin = float(kind_srt[0] - kind_srt[1])            # kind/router-head margin
+            if args.margin_source == "op":
+                margin = float(srt[0] - srt[1])                  # op-head margin (sensitivity)
+            else:
+                margin = float(kind_srt[0] - kind_srt[1])        # kind/router-head margin
             kappa = float(kappa_all[bi, pos])                    # reliability head
             update_scale = float(1.0 - op_p[o_true])             # correction magnitude
             rows.append([confidence, cand_entropy, margin, kappa, update_scale])

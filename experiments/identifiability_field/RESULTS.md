@@ -147,9 +147,37 @@ confidence/entropy/correction-magnitude collapse to a single factor, but routing
 margin and a learned reliability head are **separate axes**. The five quantities are
 **not** five readouts of one identifiability field here.
 
+### Sensitivity: is the verdict an artifact of the `margin` source?
+The primary run draws `margin` from the **router/kind head** (a deliberately
+distinct mechanism). To check that this choice is not what produces SEPARATE, the
+collector supports `--margin-source op` (margin from the op head, top1−top2), which
+makes four of five signals op-head-derived and therefore collinear by construction:
+```bash
+python collectors/collect_symbolic_aot_v8.py --out data/aot_signals_opmargin.npz \
+    --noise 1.75 --margin-source op
+python load_and_test.py --data data/aot_signals_opmargin.npz
+```
+```
+mean |off-diag corr| : 0.582     (now > 0.35)
+PCA explained var    : PC1=0.73  PC2=0.19  PC3=0.07  PC4=0.01  PC5=0.00   (PC1 > 0.55)
+PC1 loadings         : confi=+0.51 cand=-0.51 margi=+0.51 kappa=+0.12 updat=-0.45
+  -> all 5 load on PC1? min|load|=0.12     (< 0.30)
+worst sufficiency ratio = 0.94             (> 0.85)
+VERDICT: SEPARATE MECHANISMS
+```
+Even when `margin` is forced into the perception cluster, the verdict **stays
+SEPARATE** — now the *sole* holdout is `kappa` (the learned reliability head,
+loading 0.12 < 0.30). So the SEPARATE result is **not** an artifact of the
+margin-source choice: with router-margin two signals (margin, kappa) sit off the
+field; with op-margin the reliability head alone is enough to break the single-field
+condition. The reliability readout is genuinely not a projection of perception
+confidence on this substrate.
+
 ---
 
-## Stage 2 — TRANSFORMER  ⛔ NOT BUILT (gated off by Stage 1)
+## Stage 2 — TRANSFORMER
+
+### Real Stage 2  ⛔ NOT BUILT (gated off by Stage 1)
 
 Per `GOAL.md` / `CLAUDE.md`: *"if Stage 1 verdict is SEPARATE, write it to
 RESULTS.md and STOP. Do not build Stage 2."* Stage 1 is SEPARATE, so the expensive
@@ -163,7 +191,34 @@ needed hooks should Stage 1 ever flip to SHARED on a different substrate:
 the SARC relative scale), and `lora_delta(x)` for the `adapt` P0 probe. Running it
 would also require a pretrained causal-LM donor (not available offline here).
 
-## Stage 3 — cross-substrate transfer  ⛔ NOT RUN (depends on Stage 2)
+### Pipeline smoke test  ✅ WIRING VALIDATED (verdict NOT interpretable)
+To confirm the Stage-2 collector wiring works against this repo's **real**
+`MotifSwiGLUMLP` API, `collectors/stage2_smoke_motif.py` builds a tiny random
+Qwen-style SwiGLU donor, wraps it (contextual router + motif-LoRA + adapter-only
+SARC), captures per-token router `alpha`, `lora_delta`, and residual `x`, and emits
+the four transformer signals + decisions:
+```bash
+python collectors/stage2_smoke_motif.py --out data/tx_smoke.npz
+python load_and_test.py --data data/tx_smoke.npz --fig data/tx_smoke_field.png
+```
+```
+[SMOKE] wrote data/tx_smoke.npz: 8192 (token) sites x 4 signals
+[SMOKE] hooks OK: alpha(1, 3, 4), SARC last_stats=present
+================  data/tx_smoke.npz  ================
+mean|corr|=0.491  PC1=0.72  min|load|=0.05  worst suff ratio=0.67
+VERDICT: SEPARATE MECHANISMS
+```
+**This verdict is meaningless for the hypothesis** and must not be cited: the donor
+has random untrained weights, there is no real text/loss, the neutral
+function-preserving init is deliberately broken to create signal variance, and the
+`adapt` target is synthetic (middle-tertile band on the SARC scale). It confirms
+only that the hooks fire, shapes are correct (`alpha [T,M]`, SARC ratio computed),
+an npz is produced, and the engine runs end-to-end against the real API. A genuine
+Stage 2 still needs a pretrained donor + real text, and is gated off by Stage 1.
+
+Figure: `data/tx_smoke_field.png`.
+
+## Stage 3 — cross-substrate transfer  ⛔ NOT RUN (depends on real Stage 2)
 
 Requires both a Stage-1 and a Stage-2 signal matrix; Stage 2 was gated off.
 
