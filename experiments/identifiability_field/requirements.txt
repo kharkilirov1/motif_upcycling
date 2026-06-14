@@ -5,6 +5,6 @@ pandas>=2.0
 matplotlib>=3.7
 # Stage 1 (symbolic AOT substrate):
 torch>=2.1
-# Stage 2 only (transformer; not run in this gated result):
-# transformers>=4.40
-# datasets>=2.18
+# Stage 2 (real transformer: pretrained Qwen2.5-0.5B + trained overlay):
+transformers>=4.40
+datasets>=2.18

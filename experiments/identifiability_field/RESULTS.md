@@ -5,11 +5,21 @@ Experiment defined in `GOAL.md`. Verdict per stage, run verbatim from the engine
 `field_test.py` / `load_and_test.py` on this machine. Blocked stages are stated as
 blocked, with exactly what was missing.
 
-**Headline:** the symbolic Stage-1 gate returns **SEPARATE MECHANISMS** (robustly,
-across three noise levels). Per the protocol in `GOAL.md`/`CLAUDE.md`
-("if Stage 1 verdict is SEPARATE, write it to RESULTS.md and STOP — do not build
-Stage 2"), the pipeline terminates at Stage 1. This is a valid, publishable null
-for the AOT substrate, not a failure.
+**Headline:** every stage that ran returns **SEPARATE MECHANISMS**. The symbolic
+Stage-1 gate says SEPARATE (robustly, across three noise levels and both margin
+sources). The protocol gates Stage 2 off at that point, but **at the user's explicit
+request** Stage 2 was run anyway on a *real pretrained transformer* (Qwen2.5-0.5B
+with a trained motif overlay) — it also says SEPARATE. Stage 3 cross-substrate
+transfer is **at chance** (AUC 0.506) for predicting intervention sites. So the
+strong "one identifiability field" hypothesis fails on both a symbolic substrate and
+a real transformer, and the symbolic readout does not transfer to transformer
+interventions. This is a valid, decisive null — not a failure.
+
+Nuance worth keeping: a *sub-field* of perception/router-confidence signals does
+collapse together on each substrate, and the cross-substrate readout still tracks
+predictive entropy (Spearman −0.73); what fails is the strong claim that **all** the
+signals (perception, routing, reliability, SARC scale) are one field, and that one
+readout drives the downstream decisions.
 
 ---
 
@@ -175,23 +185,66 @@ confidence on this substrate.
 
 ---
 
-## Stage 2 — TRANSFORMER
+## Stage 2 — TRANSFORMER  ✅ RAN → SEPARATE (real pretrained model, by user request)
 
-### Real Stage 2  ⛔ NOT BUILT (gated off by Stage 1)
+The protocol gates Stage 2 off when Stage 1 is SEPARATE. The user explicitly asked
+to run it anyway, to test the hypothesis on a *real* substrate rather than the toy.
 
-Per `GOAL.md` / `CLAUDE.md`: *"if Stage 1 verdict is SEPARATE, write it to
-RESULTS.md and STOP. Do not build Stage 2."* Stage 1 is SEPARATE, so the expensive
-transformer rig is **intentionally not run**.
+### Setup (genuinely pretrained model + trained overlay)
+- Donor: **`Qwen/Qwen2.5-0.5B`** (real pretrained weights; its `Qwen2MLP` is exactly
+  the gate/up/down + SiLU SwiGLU the patch targets).
+- Patched MLP layers **11, 12** with `MotifSwiGLUMLP` (4 motifs, contextual router,
+  motif-LoRA rank 8, adapter-only SARC). Base frozen.
+- A function-preserving overlay starts **neutral** (`alpha ≡ 1`, zero LoRA/SARC), so
+  the router/SARC signals would be degenerate. We therefore **briefly train only the
+  overlay** (668,394 params) with an LM loss on real **wikitext-2** text (160 steps),
+  which makes the router non-neutral. Held-out wikitext is used for extraction.
+- Signals per `(token, patched-layer)` site: `confidence` (1 − next-token entropy/logV,
+  from the LM head), `cand_entropy`/`margin` (router α), `update_scale` (SARC
+  `r = log RMS(Δ)/RMS(x)`). `kappa` has no transformer analog → omitted (4 signals).
+- Decisions: `motif` = argmax α; `budget` = #active slices (α>1); **`adapt` = P0 causal
+  probe** (does the motif-LoRA delta actually lower this token's NLL? LoRA on vs off);
+  `temperature` = predictive entropy.
+```bash
+python collectors/stage2_real_motif.py --out data/tx_signals.npz --layers 11,12 \
+    --num-motifs 4 --train-steps 160 --lr 4e-3 --eval-batches 50
+python load_and_test.py --data data/tx_signals.npz --fig data/tx_field.png
+```
+`4700` (token,layer) sites. Signals non-degenerate (std: confidence 0.159,
+cand_entropy 0.061, margin 0.078, update_scale 0.414). Decisions balanced:
+`adapt=0.435`, `budget`∈{1,2,3} = [1378, 2738, 584], `motif` 4 classes.
 
-For the record, the Stage-2 collector (`collectors/collect_transformer_motif.py`)
-is specced against this repo's real Motif-Upcycling API, which exposes exactly the
-needed hooks should Stage 1 ever flip to SHARED on a different substrate:
-`MotifSwiGLUMLP._router_alpha(x)` (→ router `margin`/`cand_entropy`/`motif`),
-`ScaleAwareDeltaScaler` `ratio = log(RMS(update)/RMS(ref))` (→ `update_scale`,
-the SARC relative scale), and `lora_delta(x)` for the `adapt` P0 probe. Running it
-would also require a pretrained causal-LM donor (not available offline here).
+### Verdict (real transformer)
+```
+================  data/tx_signals.npz  ================
+mean |off-diag corr| : 0.302      (< 0.35)
+PCA explained var    : PC1=0.53  PC2=0.26  PC3=0.19  PC4=0.02   (PC1 < 0.55)
+PC1 loadings         : confi=+0.12  cand=+0.65  margi=-0.65  updat=-0.39
+  -> all 4 load on PC1? min|load|=0.12      (< 0.30)
+single-readout sufficiency (PC1-only / all-signals):
+    motif        acc: all= 0.46  pc1= 0.36  ratio= 0.78
+    budget       acc: all= 0.79  pc1= 0.64  ratio= 0.81
+    adapt        acc: all= 0.57  pc1= 0.57  ratio= 0.99
+    temperature   R2: all= 1.00  pc1= 0.04  ratio= 0.04
+  -> worst ratio = 0.04
+VERDICT: SEPARATE MECHANISMS
+```
+Figure: `data/tx_field.png`.
 
-### Pipeline smoke test  ✅ WIRING VALIDATED (verdict NOT interpretable)
+**Reading it:** the two *router* signals (`cand_entropy`, `margin`) form PC1, but the
+**LM-head `confidence` barely loads (0.12)** and the SARC `update_scale` is off-axis
+(−0.39). So on a real transformer, predictive confidence, routing, and update-scale
+are *different* axes — the same qualitative conclusion as the symbolic substrate,
+reached independently. `budget`/`adapt`/`motif` sufficiency is weak because PC1
+(router-only) cannot reproduce the LM-head-driven `temperature` (ratio 0.04).
+
+**Caveats (honest):** the overlay was trained only briefly on CPU (LM loss noisy,
+~3.0–4.5; lr 4e-3); 0.5B is the smallest real Qwen; only 2 layers patched. A longer,
+larger train could change the router geometry. But the verdict here agrees with the
+symbolic substrate and with the margin-source sensitivity, so the convergent evidence
+is strong even if any single run is modest.
+
+### Pipeline smoke test (kept for reference; verdict NOT interpretable)
 To confirm the Stage-2 collector wiring works against this repo's **real**
 `MotifSwiGLUMLP` API, `collectors/stage2_smoke_motif.py` builds a tiny random
 Qwen-style SwiGLU donor, wraps it (contextual router + motif-LoRA + adapter-only
@@ -220,16 +273,51 @@ Stage 2 still needs a pretrained donor + real text, and is gated off by Stage 1.
 
 Figure: `data/tx_smoke_field.png`.
 
-## Stage 3 — cross-substrate transfer  ⛔ NOT RUN (depends on real Stage 2)
+## Stage 3 — cross-substrate transfer  ✅ RAN → AT CHANCE (no transferable field)
 
-Requires both a Stage-1 and a Stage-2 signal matrix; Stage 2 was gated off.
+Fit the 1-D field readout (PC1) on the **symbolic** Stage-1 signals, then apply it
+(rank-only, signals standardized on each substrate) to the **transformer** Stage-2
+signals to predict high-value intervention sites. Shared signals: the four common to
+both substrates (`confidence, cand_entropy, margin, update_scale`; `kappa` is
+symbolic-only).
+```bash
+python collectors/stage3_transfer.py --stage1 data/aot_signals.npz \
+    --stage2 data/tx_signals.npz --target adapt
+```
+```
+shared signals (4): ['confidence', 'cand_entropy', 'margin', 'update_scale']
+Stage-1 PC1 loadings (sign-fixed): confid=+0.59  cand_e=-0.59  margin=+0.01  update=-0.54
+Stage-1 PC1 explained variance: 0.664
+target = Stage-2 'adapt'  (base-rate=0.435, n=4700)
+transferred-field AUC   : 0.506   (chance=0.500)   [raw 0.494]
+in-domain Stage-2 PC1   : 0.504   (ceiling for these signals)
+Spearman(field, temp)   : -0.733
+VERDICT: AT CHANCE -> no transferable field
+```
+**Reading it:** the symbolic field readout predicts the transformer `adapt` probe at
+**chance** (AUC 0.506). Note even the *in-domain* Stage-2 PC1 is at chance (0.504) for
+`adapt` — so this is not a transfer failure of a working in-domain field; the field
+simply does not encode "where does motif-LoRA help". What *does* transfer is the
+confidence axis: the transferred field correlates strongly with predictive entropy
+(Spearman −0.73). So a "how-confident" readout is substrate-portable, but it is **not**
+the same thing as "where to intervene" — exactly the SHARED-vs-coincidence distinction
+`GOAL.md` insists on, resolved on the side of SEPARATE.
 
 ---
 
 ## How to reproduce
 ```bash
 pip install -r requirements.txt          # numpy/sklearn/scipy/pandas/matplotlib + torch
+#                                          (+ transformers/datasets for Stage 2)
 python field_test.py                                   # Stage 0
+# Stage 1 (symbolic):
 python collectors/collect_symbolic_aot_v8.py --out data/aot_signals.npz --noise 1.75
-python load_and_test.py --data data/aot_signals.npz --fig data/aot_field.png   # Stage 1
+python load_and_test.py --data data/aot_signals.npz --fig data/aot_field.png
+# Stage 2 (real pretrained Qwen + trained overlay):
+python collectors/stage2_real_motif.py --out data/tx_signals.npz --layers 11,12 \
+    --num-motifs 4 --train-steps 160 --lr 4e-3 --eval-batches 50
+python load_and_test.py --data data/tx_signals.npz --fig data/tx_field.png
+# Stage 3 (cross-substrate transfer):
+python collectors/stage3_transfer.py --stage1 data/aot_signals.npz \
+    --stage2 data/tx_signals.npz --target adapt
 ```

@@ -30,11 +30,19 @@ python load_and_test.py --data data/aot_signals.npz --fig data/aot_field.png  # 
 ```
 
 ## Result (summary)
-On the symbolic AOT substrate the verdict is **SEPARATE MECHANISMS**, robust across
-noise levels 1.0/1.75/2.5. Operator-perception signals collapse to one factor, but
-router `margin` is orthogonal and the reliability head `kappa` only weakly related —
-so they are not one shared field here. Per the protocol, this gates off the more
-expensive transformer stages. See `RESULTS.md` for full verdict blocks.
+Every stage that ran returns **SEPARATE MECHANISMS**:
+- **Stage 1 (symbolic AOT):** SEPARATE, robust across noise 1.0/1.75/2.5 and both
+  margin sources. Operator-perception signals collapse to one factor; router `margin`
+  and the reliability head `kappa` are separate axes.
+- **Stage 2 (real Qwen2.5-0.5B + trained motif overlay, by user request):** SEPARATE.
+  Router signals form PC1; the LM-head `confidence` barely loads (0.12) and SARC
+  `update_scale` is off-axis.
+- **Stage 3 (cross-substrate transfer):** AUC 0.506 ≈ chance for predicting transformer
+  intervention sites. The transferred readout tracks predictive entropy (Spearman
+  −0.73) but does not encode "where to intervene".
+
+So the strong "one identifiability field" hypothesis fails on both a symbolic
+substrate and a real transformer. See `RESULTS.md` for full verdict blocks.
 
 ## Non-negotiable
 Never fabricate results. A stage that can't run is reported as blocked. The null
