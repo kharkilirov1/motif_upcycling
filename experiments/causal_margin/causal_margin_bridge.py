@@ -172,14 +172,19 @@ def main():
     print(f"[margin] equal-margin point (gap=0) at d_attn={'%.1f' % eq_da if eq_da else 'n/a'}")
     print(f"[recipe] local margin at STANDARD says move {direction}; truth is {truth_dir} "
           f"-> {'CORRECT' if direction_correct else 'WRONG/flat'}")
+    # honest test: does the nearest grid point to the equal-margin prediction equal the
+    # loss argmin? (|diff| <= grid step is too lenient -- it admits the adjacent point.)
+    eq_nearest = min(grid, key=lambda g: abs(g - eq_da)) if eq_da is not None else None
+    eq_matches = (eq_nearest == argmin["d_attn"])
     if eq_da is not None:
-        print(f"[verdict] equal-margin predicts d_attn~{eq_da:.0f}; loss argmin at {argmin['d_attn']} "
-              f"(|diff|={abs(eq_da-argmin['d_attn']):.0f}, grid step={hd}) -> "
-              f"{'MATCH within one grid step' if abs(eq_da-argmin['d_attn'])<=hd else 'mismatch'}")
+        print(f"[verdict] equal-margin predicts d_attn~{eq_da:.0f} (nearest grid pt {eq_nearest}); "
+              f"loss argmin at {argmin['d_attn']} -> "
+              f"{'MATCH' if eq_matches else 'MISS (estimator biased; trainability != representability)'}")
 
     report = {"d_model": dm, "T": T, "head_dim": hd, "deltas": deltas, "steps": args.steps,
               "seeds": seeds, "standard_d_attn": dm, "rows": rows,
-              "equal_margin_d_attn": eq_da, "loss_argmin_d_attn": argmin["d_attn"],
+              "equal_margin_d_attn": eq_da, "equal_margin_nearest_grid": eq_nearest,
+              "loss_argmin_d_attn": argmin["d_attn"], "equal_margin_matches_argmin": bool(eq_matches),
               "standard_gap": std_gap, "recipe_direction": direction, "truth_direction": truth_dir,
               "direction_correct": bool(direction_correct)}
     outp = THIS.parent / args.out

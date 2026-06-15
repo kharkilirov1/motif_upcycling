@@ -1,0 +1,90 @@
+{
+  "d_model": 96,
+  "T": 576,
+  "head_dim": 24,
+  "deltas": [
+    16,
+    32
+  ],
+  "steps": 1200,
+  "seeds": [
+    0,
+    1
+  ],
+  "standard_d_attn": 96,
+  "rows": [
+    {
+      "d_attn": 48,
+      "d_ff": 480,
+      "n_heads": 2,
+      "attn_frac": 0.16666666666666666,
+      "val_loss_mean": 1.881622414290905,
+      "val_loss_sd": 0.004333905875682831,
+      "m_attn": 1.131378909728177e-06,
+      "m_ffn": 4.670977499767192e-08,
+      "gap_mean": -1.084669134730505e-06,
+      "gap_sd": 1.4667937109522951e-07,
+      "is_standard": false
+    },
+    {
+      "d_attn": 72,
+      "d_ff": 432,
+      "n_heads": 3,
+      "attn_frac": 0.25,
+      "val_loss_mean": 1.8674318522214888,
+      "val_loss_sd": 0.008929988741874673,
+      "m_attn": 9.208536034243143e-08,
+      "m_ffn": 4.1991366706130796e-08,
+      "gap_mean": -5.009399363630063e-08,
+      "gap_sd": 8.158595947963415e-09,
+      "is_standard": false
+    },
+    {
+      "d_attn": 96,
+      "d_ff": 384,
+      "n_heads": 4,
+      "attn_frac": 0.3333333333333333,
+      "val_loss_mean": 1.8725234389305114,
+      "val_loss_sd": 0.004178199172020003,
+      "m_attn": 5.1295339492046775e-08,
+      "m_ffn": 5.315186475248482e-08,
+      "gap_mean": 1.8565252604380496e-09,
+      "gap_sd": 3.7993646670925774e-08,
+      "is_standard": true
+    },
+    {
+      "d_attn": 120,
+      "d_ff": 336,
+      "n_heads": 5,
+      "attn_frac": 0.4166666666666667,
+      "val_loss_mean": 1.8794209152460097,
+      "val_loss_sd": 0.00409693121910093,
+      "m_attn": 4.1229721982889296e-08,
+      "m_ffn": 4.446378120014304e-08,
+      "gap_mean": 3.2340592172537436e-09,
+      "gap_sd": 1.2265758016483553e-08,
+      "is_standard": false
+    },
+    {
+      "d_attn": 144,
+      "d_ff": 288,
+      "n_heads": 6,
+      "attn_frac": 0.5,
+      "val_loss_mean": 1.8890643760561943,
+      "val_loss_sd": 0.004425401985645339,
+      "m_attn": 6.610152922803627e-08,
+      "m_ffn": 7.850036733240675e-08,
+      "gap_mean": 1.2398838104370492e-08,
+      "gap_sd": 1.4062202858959107e-09,
+      "is_standard": false
+    }
+  ],
+  "equal_margin_d_attn": 95.14232605955144,
+  "loss_argmin_d_attn": 72,
+  "standard_gap": 1.8565252604380496e-09,
+  "recipe_direction": "toward FFN (lower d_attn)",
+  "truth_direction": "toward FFN (lower d_attn)",
+  "direction_correct": true,
+  "equal_margin_nearest_grid": 96,
+  "equal_margin_matches_argmin": false
+}
