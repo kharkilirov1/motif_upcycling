@@ -78,6 +78,8 @@ def main():
     ap.add_argument("--groups", default="", help="coarse roles, e.g. 'attn=q+o;ffn=gate+up+down'")
     ap.add_argument("--ranks", default="2,4,8,16,32,64,128,192,256")
     ap.add_argument("--sigma-rank", type=int, default=16, help="probe rank for sigma interactions")
+    ap.add_argument("--sigma-ranks", default="", help="explicit probe ranks for sigma (small "
+                    "perturbations near the operating point avoid the loss-ceiling artifact)")
     ap.add_argument("--calib-seq", type=int, default=12)
     ap.add_argument("--eval-seq", type=int, default=24)
     ap.add_argument("--seq-len", type=int, default=48)
@@ -240,7 +242,10 @@ def main():
             modules[k].weight.data = W
 
     L0 = lm_loss(model, ev)
-    probe_ranks = sorted(set([max(2, args.sigma_rank // 2), args.sigma_rank, args.sigma_rank * 2]))
+    if args.sigma_ranks:
+        probe_ranks = [int(x) for x in args.sigma_ranks.split(",")]
+    else:
+        probe_ranks = sorted(set([max(2, args.sigma_rank // 2), args.sigma_rank, args.sigma_rank * 2]))
     sigma_by_rank = {}
     dL_last = {}; inter_last = {}
     for rp in probe_ranks:
