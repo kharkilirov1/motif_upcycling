@@ -75,6 +75,7 @@ def main():
     ap.add_argument("--model", default="Qwen/Qwen2.5-0.5B")
     ap.add_argument("--layers", default="8,9,10,11,12,13,14,15")
     ap.add_argument("--types", default="q,o,gate,up,down")
+    ap.add_argument("--groups", default="", help="coarse roles, e.g. 'attn=q+o;ffn=gate+up+down'")
     ap.add_argument("--ranks", default="2,4,8,16,32,64,128,192,256")
     ap.add_argument("--sigma-rank", type=int, default=16, help="probe rank for sigma interactions")
     ap.add_argument("--calib-seq", type=int, default=12)
@@ -86,9 +87,19 @@ def main():
 
     from transformers import AutoModelForCausalLM, AutoTokenizer
     layers = [int(x) for x in args.layers.split(",")]
-    types = args.types.split(",")
     ranks = [int(x) for x in args.ranks.split(",")]
-    M = len(types)
+    # roles: either fine (each type its own role) or coarse groups via --groups
+    if args.groups:
+        roles = {}
+        for grp in args.groups.split(";"):
+            name, mem = grp.split("="); roles[name] = mem.split("+")
+    else:
+        roles = {t: [t] for t in args.types.split(",")}
+    roles_list = list(roles)
+    base_types = sorted({bt for mem in roles.values() for bt in mem})
+    members = {name: [(L, bt) for L in layers for bt in roles[name]] for name in roles_list}
+    M = len(roles_list)
+    types = base_types  # base modules to instrument
 
     print(f"[cm] loading {args.model} ...")
     tok = AutoTokenizer.from_pretrained(args.model)
@@ -126,17 +137,18 @@ def main():
             eps_mod[k][r] = float(((X @ (W - Wr).t()) ** 2).sum()) / fon
             cost_mod[k][r] = rr * (out_f + in_f)
 
-    # ---- role-level curves (aggregate modules of a type across layers) ----
-    role_eps = {t: {r: float(np.mean([eps_mod[(L, t)][r] for L in layers])) for r in ranks} for t in types}
-    role_cost = {t: {r: int(sum(cost_mod[(L, t)][r] for L in layers)) for r in ranks} for t in types}
+    # ---- role-level curves (aggregate member modules across layers) ----
+    role_eps = {nm: {r: float(np.mean([eps_mod[k][r] for k in members[nm]])) for r in ranks} for nm in roles_list}
+    role_cost = {nm: {r: int(sum(cost_mod[k][r] for k in members[nm])) for r in ranks} for nm in roles_list}
+    print(f"[curves] roles={roles}")
     print("[curves] role functional error eps_i(r):")
-    for t in types:
+    for t in roles_list:
         print(f"  {t:5s} " + "  ".join(f"r{r}={role_eps[t][r]:.3f}" for r in ranks))
 
     # ---- saturating set S: relative slope of eps over the top of the grid ----
     S = set()
     caps = {}
-    for t in types:
+    for t in roles_list:
         e = [role_eps[t][r] for r in ranks]
         # relative drop over the last two grid steps
         rel = (e[-2] - e[-1]) / max(e[0] - e[-1], 1e-9)
@@ -153,14 +165,14 @@ def main():
 
     # ---- eta(B_tot): capped water-filling optimal vs uniform, matching error ----
     def cost_of(alloc):
-        return sum(role_cost[t][alloc[t]] for t in types)
+        return sum(role_cost[t][alloc[t]] for t in roles_list)
 
     def err_of(alloc):
-        return sum(role_eps[t][alloc[t]] for t in types)
+        return sum(role_eps[t][alloc[t]] for t in roles_list)
 
     def optimal_alloc(budget):
         # exact DP over rank grid (capped), min total eps s.t. total cost <= budget
-        keys = types
+        keys = roles_list
         cur = {0: (0.0, {})}
         for t in keys:
             nxt = {}
@@ -182,7 +194,7 @@ def main():
         # in-grid rank each role can afford within its share.
         per = budget / M
         a = {}
-        for t in types:
+        for t in roles_list:
             r_sel = ranks[0]
             for r in ranks:
                 if role_cost[t][r] <= per:
@@ -192,8 +204,8 @@ def main():
 
     # sweep B_tot, compute eta = B_uni/B_tot where B_uni is the smallest equal-budget
     # uniform total needed to reach optimal's error E_opt.
-    base = cost_of({t: ranks[2] for t in types})
-    full_cost = cost_of({t: ranks[-1] for t in types})
+    base = cost_of({t: ranks[2] for t in roles_list})
+    full_cost = cost_of({t: ranks[-1] for t in roles_list})
     # fine geometric budget grid for the uniform-match search
     uni_grid = sorted(set(int(b) for b in np.geomspace(base * 0.3, full_cost * 6, 80)))
     etas = []
@@ -214,10 +226,10 @@ def main():
     print(f"[eta] theoretical limit m/(m-|S|) = {M}/{M-len(S)} = {eta_theory:.3f}")
 
     # ---- sigma: end-to-end LM-loss interactions under JOINT role compression ----
-    def truncate_role(t, r):
+    def truncate_role(nm, r):
         saved = {}
-        for L in layers:
-            k = (L, t); mod = modules[k]; U, Sv, Vt, rmax = svd[k]
+        for k in members[nm]:
+            mod = modules[k]; U, Sv, Vt, rmax = svd[k]
             rr = min(r, rmax)
             saved[k] = mod.weight.data
             mod.weight.data = ((U[:, :rr] * Sv[:rr]) @ Vt[:rr]).to(mod.weight.dtype)
@@ -233,15 +245,15 @@ def main():
     dL_last = {}; inter_last = {}
     for rp in probe_ranks:
         dL = {}
-        for t in types:
+        for t in roles_list:
             sv = truncate_role(t, rp); dL[t] = lm_loss(model, ev) - L0; restore(sv)
         inter = {}
-        for a, b in itertools.combinations(types, 2):
+        for a, b in itertools.combinations(roles_list, 2):
             sa = truncate_role(a, rp); sb = truncate_role(b, rp)
             dLab = lm_loss(model, ev) - L0
             restore(sb); restore(sa)
             inter[(a, b)] = dLab - (dL[a] + dL[b])     # off-diagonal interaction
-        diag = np.mean([abs(dL[t]) for t in types])
+        diag = np.mean([abs(dL[t]) for t in roles_list])
         offd = np.mean([abs(v) for v in inter.values()])
         sigma_by_rank[rp] = float(offd / max(diag, 1e-9))
         dL_last, inter_last = dL, inter
@@ -250,7 +262,7 @@ def main():
     sigma = float(np.mean(list(sigma_by_rank.values())))
     rp = probe_ranks[-1]
     print(f"[sigma] full L0={L0:.4f}  sigma (mean over probe ranks {probe_ranks}) = {sigma:.3f}")
-    print("[sigma] per-role dL_i (last rank): " + "  ".join(f"{t}={dL_last[t]:+.3f}" for t in types))
+    print("[sigma] per-role dL_i (last rank): " + "  ".join(f"{t}={dL_last[t]:+.3f}" for t in roles_list))
     worst = max(inter_last.items(), key=lambda kv: abs(kv[1]))
     print(f"[sigma] strongest interaction (last rank): {worst[0]} = {worst[1]:+.4f}")
     dL = dL_last; inter = inter_last
@@ -267,7 +279,7 @@ def main():
                    f"licensed; budgets must be searched jointly.")
     print(f"\nVERDICT: {verdict}")
 
-    report = {"model": args.model, "layers": layers, "types": types, "ranks": ranks,
+    report = {"model": args.model, "layers": layers, "roles": roles, "ranks": ranks,
               "role_eps": role_eps, "role_cost": role_cost, "saturating_set": sorted(S),
               "caps": caps, "eta_sweep": etas, "eta_theory_limit": eta_theory,
               "L0": L0, "sigma_by_rank": sigma_by_rank, "dL_role": dL,
