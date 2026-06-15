@@ -88,6 +88,7 @@ def main():
     layers = [int(x) for x in args.layers.split(",")]
     types = args.types.split(",")
     ranks = [int(x) for x in args.ranks.split(",")]
+    M = len(types)
 
     print(f"[cm] loading {args.model} ...")
     tok = AutoTokenizer.from_pretrained(args.model)
@@ -99,8 +100,8 @@ def main():
     modules = {(L, t): get_module(model, L, t) for L in layers for t in types}
     cache = {k: [] for k in modules}
     handles = []
-    for k, m in modules.items():
-        handles.append(m.register_forward_hook(lambda mod, inp, out, kk=k: cache[kk].append(
+    for k, mod in modules.items():
+        handles.append(mod.register_forward_hook(lambda mod, inp, out, kk=k: cache[kk].append(
             inp[0].detach().reshape(-1, inp[0].shape[-1]))))
     with torch.no_grad():
         for i in range(calib.shape[0]):
@@ -109,11 +110,11 @@ def main():
         h.remove()
 
     svd = {}; eps_mod = {}; cost_mod = {}
-    for k, m in modules.items():
+    for k, mod in modules.items():
         X = torch.cat(cache[k], 0).float()
         if X.shape[0] > 2000:
             X = X[torch.randperm(X.shape[0])[:2000]]
-        W = m.weight.data.float()
+        W = mod.weight.data.float()
         FO = X @ W.t(); fon = float((FO ** 2).sum()) + 1e-9
         U, S, Vt = torch.linalg.svd(W, full_matrices=False)
         svd[k] = (U, S, Vt, min(W.shape))
@@ -179,7 +180,7 @@ def main():
     def uniform_alloc(budget):
         # protocol Def 2.1: equal BUDGET per role (B_tot/m), realized as the largest
         # in-grid rank each role can afford within its share.
-        per = budget / m
+        per = budget / M
         a = {}
         for t in types:
             r_sel = ranks[0]
@@ -209,8 +210,8 @@ def main():
                      "opt_alloc": bopt, "uniform_alloc_at_Btot": uniform_alloc(Btot)})
         es = "inf" if eta == float("inf") else round(eta, 3)
         print(f"[eta] B_tot={Btot} E_opt={Eopt:.3f} B_uni={Buni} eta={es}")
-    m = len(types); eta_theory = m / max(1, (m - len(S)))
-    print(f"[eta] theoretical limit m/(m-|S|) = {m}/{m-len(S)} = {eta_theory:.3f}")
+    eta_theory = M / max(1, (M - len(S)))
+    print(f"[eta] theoretical limit m/(m-|S|) = {M}/{M-len(S)} = {eta_theory:.3f}")
 
     # ---- sigma: end-to-end LM-loss interactions under JOINT role compression ----
     def truncate_role(t, r):
