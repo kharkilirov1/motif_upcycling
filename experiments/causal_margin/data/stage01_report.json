@@ -1,0 +1,143 @@
+{
+  "d_model": 96,
+  "T": 576,
+  "head_dim": 24,
+  "steps": 1200,
+  "seeds": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "grid": [
+    24,
+    48,
+    72,
+    96,
+    120,
+    144,
+    168
+  ],
+  "curve": {
+    "24": {
+      "mean": 1.877458433061838,
+      "sd": 0.00735544765438466,
+      "se": 0.00367772382719233,
+      "per_seed": [
+        1.8830334961414337,
+        1.8684607475996018,
+        1.8721514254808427,
+        1.8861880630254746
+      ],
+      "attn_frac": 0.08333333333333333,
+      "is_standard": false
+    },
+    "48": {
+      "mean": 1.8785378620028497,
+      "sd": 0.004579691094839716,
+      "se": 0.002289845547419858,
+      "per_seed": [
+        1.8772885084152222,
+        1.8859563201665879,
+        1.8774868965148925,
+        1.8734197229146958
+      ],
+      "attn_frac": 0.16666666666666666,
+      "is_standard": false
+    },
+    "72": {
+      "mean": 1.8753774404525756,
+      "sd": 0.010324910223323887,
+      "se": 0.005162455111661943,
+      "per_seed": [
+        1.8585018634796142,
+        1.8763618409633636,
+        1.8806401014328002,
+        1.8860059559345246
+      ],
+      "attn_frac": 0.25,
+      "is_standard": false
+    },
+    "96": {
+      "mean": 1.8788557074964045,
+      "sd": 0.010944421796697476,
+      "se": 0.005472210898348738,
+      "per_seed": [
+        1.8683452397584914,
+        1.8767016381025314,
+        1.8732754558324813,
+        1.8971004962921143
+      ],
+      "attn_frac": 0.3333333333333333,
+      "is_standard": true
+    },
+    "120": {
+      "mean": 1.880421708524227,
+      "sd": 0.010165714766268756,
+      "se": 0.005082857383134378,
+      "per_seed": [
+        1.875323984026909,
+        1.8835178464651108,
+        1.8677150040864945,
+        1.8951299995183946
+      ],
+      "attn_frac": 0.4166666666666667,
+      "is_standard": false
+    },
+    "144": {
+      "mean": 1.8866454146802427,
+      "sd": 0.005414556766509748,
+      "se": 0.002707278383254874,
+      "per_seed": [
+        1.8934897780418396,
+        1.884638974070549,
+        1.8894559770822525,
+        1.8789969295263291
+      ],
+      "attn_frac": 0.5,
+      "is_standard": false
+    },
+    "168": {
+      "mean": 1.884483814239502,
+      "sd": 0.005121645191641448,
+      "se": 0.002560822595820724,
+      "per_seed": [
+        1.8863768249750137,
+        1.8756838321685791,
+        1.8880933403968811,
+        1.8877812594175338
+      ],
+      "attn_frac": 0.5833333333333334,
+      "is_standard": false
+    }
+  },
+  "stage0": {
+    "argmin_d_attn": 72,
+    "argmin_val": 1.8753774404525756,
+    "standard_d_attn": 96,
+    "gap_std_minus_best": 0.00347826704382892,
+    "pooled_se": 0.0075230336232088735,
+    "uniform_suboptimal": false,
+    "blind_sweep_trains": 28
+  },
+  "stage1": {
+    "descent_path": [
+      96,
+      72
+    ],
+    "visited": [
+      96,
+      72,
+      120,
+      48
+    ],
+    "landed_d_attn": 72,
+    "k_architectures": 4,
+    "k_trains": 16,
+    "hit_optimum": true,
+    "improvement_over_standard": 0.00347826704382892,
+    "improvement_2se": 0.015046067246417747,
+    "landed_significant": false
+  },
+  "verdict": "NO SIGNIFICANT PRIZE at this scale: trained val-loss flat across d_attn in [24,120] (argmin 72 beats standard by 0.0035 < 2SE 0.0150); only attention-heavy splits (>=0.5) clearly worse. 2-seed 'uniform suboptimal' was underpowered. Functional-error eta~1.85x does NOT translate to a trained val-loss advantage here. Descent 'hits' 72 but within noise. Gating question now SCALE."
+}

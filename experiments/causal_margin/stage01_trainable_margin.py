@@ -124,25 +124,40 @@ def main():
         cur = better; path.append(cur)
     landed = cur
     k_trains = len(visited)
+    # is the landed point SIGNIFICANTLY better than the standard split?
+    land_gap = curve[std]["mean"] - curve[landed]["mean"]
+    land_2se = 2 * math.sqrt(curve[std]["se"] ** 2 + curve[landed]["se"] ** 2)
+    land_significant = land_gap > land_2se
 
     print(f"\n[Stage1] trainable-margin descent path: {path}")
     print(f"[Stage1] landed at d_attn={landed} (frac={2*landed/T:.2f}) val={curve[landed]['mean']:.4f}; "
           f"trained {k_trains} distinct architectures (x{len(seeds)} seeds = {k_trains*len(seeds)} trains) "
           f"vs blind sweep {n_sweep}")
     hit = (landed == argmin)
-    print(f"[Stage1] descent {'HIT' if hit else 'MISSED'} the ground-truth optimum "
-          f"(one-shot representational probe had MISSED, landing on standard {std})")
+    print(f"[Stage1] descent {'HIT' if hit else 'MISSED'} the argmin; improvement over standard "
+          f"{land_gap:+.4f} vs 2SE {land_2se:.4f} -> {'SIGNIFICANT' if land_significant else 'within noise (hollow)'}")
 
-    verdict = (
-        f"TRAINABLE margin {'RECOVERS' if hit else 'does NOT recover'} the from-scratch optimum "
-        f"d_attn={argmin}, using {k_trains}/{len(grid)} architectures of the sweep. "
-        + ("This revives the strong version's plausibility: the bridge's failure was the "
-           "cheap one-shot estimator (representational), not the principle. Open cost question: "
-           "trainable margin needs retrained neighbors -> Stage 2 tests whether this still beats "
-           "blind search when m (number of budget axes) is large." if hit else
-           "Even the trainable margin misses -> the budget landscape is not locally navigable here; "
-           "strong version in serious doubt at this scale.")
-    )
+    if not sig:
+        verdict = (
+            f"NO SIGNIFICANT PRIZE at this scale: the trained val-loss is FLAT across "
+            f"d_attn in [{gas[0]},120] (argmin {argmin} beats standard by only {gap_std:.4f} < 2SE "
+            f"{2*pooled_se:.4f}); only attention-heavy splits (>=0.5) are clearly worse. The earlier "
+            f"2-seed 'uniform suboptimal' was underpowered. So the functional-error eta~1.85x does NOT "
+            f"translate into a trained val-loss advantage here. Stage 1's descent 'hits' {landed} but "
+            f"the win is within noise. GATING QUESTION is now SCALE: find a regime where the split "
+            f"significantly moves trained val-loss before Stage 2 (many roles) is meaningful."
+        )
+    elif hit and land_significant:
+        verdict = (
+            f"TRAINABLE margin RECOVERS a SIGNIFICANT optimum d_attn={argmin} using {k_trains}/{len(grid)} "
+            f"architectures. Revives the strong version: the bridge failure was the cheap one-shot "
+            f"estimator, not the principle. Stage 2 tests the O(m) efficiency claim at large m."
+        )
+    else:
+        verdict = (
+            f"MIXED: significant prize exists (argmin {argmin}) but descent {'hit but not significant' if hit else 'missed'}; "
+            f"landscape only partly navigable by trainable margin."
+        )
     print(f"\nVERDICT: {verdict}")
 
     report = {"d_model": dm, "T": T, "head_dim": hd, "steps": args.steps, "seeds": seeds,
