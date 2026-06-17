@@ -1,1 +1,3 @@
 *.npz
+# transient resumable-run cache (intermediate, not a result)
+scale_gate_cache.json
