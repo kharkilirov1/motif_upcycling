@@ -32,6 +32,24 @@ import from_scratch_split as fss   # noqa: E402
 
 torch.set_num_threads(max(1, torch.get_num_threads()))
 
+CACHE_PATH = THIS.parent / "data" / "scale_gate_cache.json"
+
+
+def load_cache():
+    if CACHE_PATH.exists():
+        try:
+            return json.load(open(CACHE_PATH))
+        except Exception:
+            return {}
+    return {}
+
+
+def save_cache(cache):
+    CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = CACHE_PATH.with_suffix(".tmp")
+    json.dump(cache, open(tmp, "w"))
+    tmp.replace(CACHE_PATH)   # atomic: a reap mid-write cannot corrupt the cache
+
 
 def train_val(vocab, dm, d_attn, d_ff, nh, n_layers, block, data_tr, data_va, steps, bs, lr, seed):
     torch.manual_seed(seed)
@@ -82,6 +100,19 @@ def main():
     n_tr = int(0.9 * len(data)); data_tr, data_va = data[:n_tr], data[n_tr:]
     print(f"[data] chars={len(data)} vocab={vocab}  rungs={rungs} fracs={fracs} seeds={seeds}")
 
+    cache = load_cache()
+
+    def cached_train(da, d_ff, nh, steps, sd):
+        # key pins everything that changes the trained val-loss, so reusing across reaps is safe
+        key = f"mc{args.max_chars}|v{vocab}|dm{dm}|da{da}|dff{d_ff}|nh{nh}|nl{args.n_layers}|" \
+              f"blk{args.block}|bs{args.bs}|lr{args.lr}|st{steps}|sd{sd}"
+        if key in cache:
+            return cache[key]
+        v = train_val(vocab, dm, da, d_ff, nh, args.n_layers, args.block,
+                      data_tr, data_va, steps, args.bs, args.lr, sd)
+        cache[key] = v; save_cache(cache)   # persist after every train -> reap-proof
+        return v
+
     summary = []
     for dm, hd, steps in rungs:
         T = 6 * dm
@@ -93,8 +124,7 @@ def main():
             if 2 * da >= T:
                 continue
             nh = max(1, da // hd); d_ff = T - 2 * da
-            vls = [train_val(vocab, dm, da, d_ff, nh, args.n_layers, args.block,
-                             data_tr, data_va, steps, args.bs, args.lr, sd) for sd in seeds]
+            vls = [cached_train(da, d_ff, nh, steps, sd) for sd in seeds]
             pts[da] = {"attn_frac": 2 * da / T, "mean": float(np.mean(vls)),
                        "se": float(np.std(vls) / math.sqrt(len(vls))), "per_seed": vls}
             print(f"[d={dm} steps={steps}] d_attn={da:3d} frac={pts[da]['attn_frac']:.2f} "
